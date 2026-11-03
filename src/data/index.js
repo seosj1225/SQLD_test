@@ -2,5 +2,6 @@
 // 배열 순서대로 회차 선택 화면에 표시됩니다 (최신 회차를 위에).
 import exam59 from "./exams/exam59.js";
 import exam58 from "./exams/exam58.js";
+import exam57 from "./exams/exam57.js";
 
-export const exams = [exam59, exam58];
+export const exams = [exam59, exam58, exam57];
