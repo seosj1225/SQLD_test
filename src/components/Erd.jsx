@@ -11,10 +11,12 @@
 //                                     | "oneMany"(까마귀발+|) | "zeroMany"(까마귀발+○)
 //          line,                      "solid"(기본) | "dashed" | "mix"(a 쪽 절반 점선, b 쪽 절반 실선)
 //          route,                     "straight"(기본) | "elbow"(ㄱ자: 위쪽 엔터티 아래변 → 아래쪽 엔터티 옆변)
-//          ux,                        elbow 시작점의 가로 위치(위쪽 엔터티 폭 대비 0~1, 기본 0.5)
+//                                     | "self"(자기 참조: a 끝 = 오른쪽 변 FK 행, b 끝 = 아래변, a와 b는 같은 엔터티)
+//          ux,                        elbow 시작점 / self 아래쪽 끝의 가로 위치(엔터티 폭 대비 0~1, 기본 0.5 / 0.6)
 //          label }]                   선 위 글자 (예: "식별"). 없으면 표시 안 함
 
 const PAD = 10, LH = 19, HEAD = 26, GX = 96, GY = 64, M = 14, FS = 13;
+const SELF_X = 44, SELF_Y = 36; // 자기 참조 고리가 엔터티 밖으로 나가는 폭/높이
 
 function textWidth(t, size) {
   let w = 0;
@@ -45,7 +47,8 @@ function layout(d) {
     b.x = colX(b.e.c) + (colW[b.e.c] - b.w) / 2;
     b.y = rowY(b.e.r);
   });
-  return { boxes, W: colX(nc) - GX + M, H: rowY(nr) - GY + M };
+  const self = d.rels.some((r) => r.route === "self");
+  return { boxes, W: colX(nc) - GX + M + (self ? SELF_X + 8 : 0), H: rowY(nr) - GY + M + (self ? SELF_Y + 8 : 0) };
 }
 
 function Entity({ b }) {
@@ -148,7 +151,16 @@ function EndMark({ kind, ex, ey, ux, uy, cls }) {
 function RelationV2({ r, A, B }) {
   const cls = "erd-rel " + (r.label === "비식별" ? "nid" : "id");
   let pts, ua, ub; // pts: 선을 이루는 점들(A 끝 → B 끝), ua/ub: 각 끝에서 선 쪽 방향
-  if (r.route === "elbow") {
+  if (r.route === "self") {
+    // 자기 참조: A 끝 = 오른쪽 변(FK 속성 행 높이), B 끝 = 아래변. 오른쪽 → 아래 → 왼쪽으로 돌아 들어옴
+    const b = A;
+    const fi = b.e.at.findIndex((l) => l.includes("FK"));
+    const ay = fi >= 0 ? b.y + HEAD + b.pkH + 13 + fi * LH : b.y + b.h / 2;
+    const rx = b.x + b.w, by = b.y + b.h;
+    const ox = rx + SELF_X, oy = by + SELF_Y, bx = b.x + b.w * (r.ux ?? 0.6);
+    pts = [[rx, ay], [ox, ay], [ox, oy], [bx, oy], [bx, by]];
+    ua = [1, 0]; ub = [0, 1];
+  } else if (r.route === "elbow") {
     const up = A.y <= B.y ? A : B, low = up === A ? B : A;
     const sx = up.x + up.w * (r.ux ?? 0.5), sy = up.y + up.h;
     const ty = low.y + HEAD + 18;
@@ -197,7 +209,7 @@ function RelationV2({ r, A, B }) {
 function Legend({ d }) {
   const isV2 = (r) => r.a !== undefined;
   const hasId = d.rels.some((r) => (isV2(r) ? r.label === "식별" && r.line !== "dashed" : r.id));
-  const hasN = d.rels.some((r) => (isV2(r) ? r.label === "비식별" && r.line === "dashed" : !r.id && !r.solid));
+  const hasN = d.rels.some((r) => (isV2(r) ? r.line === "dashed" && r.label !== "식별" : !r.id && !r.solid));
   const fk = (<><span className="lg-fk">파란 글씨</span> = 상속된 FK</>);
   return (
     <div className="erd-legend">
