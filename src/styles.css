@@ -115,6 +115,7 @@ td.null { color: var(--muted); font-style: italic; }
 .erd-rel.id { stroke: var(--navy); }
 .erd-rel.nid { stroke: var(--omr); }
 .erd-rel.nid.line { stroke-dasharray: 6 4; }
+.erd-rel.dash { stroke-dasharray: 6 4; }
 .erd-rel.ring { fill: var(--code-bg); }
 .erd-lbl { font-family: var(--f-body); font-size: 11.5px; font-weight: 700; }
 .erd-lbl.id { fill: var(--navy); }

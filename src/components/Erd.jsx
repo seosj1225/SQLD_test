@@ -4,6 +4,15 @@
 //          co 자식쪽 선택(○), cm 자식쪽 필수(|), fb 까마귀발 바로 옆 세로줄,
 //          nb 부모쪽 세로줄 생략, mix 절반 실선/절반 점선, solid 항상 실선, plain 라벨 없음 }]
 // noSym/note: 기본 기호 범례 대신 note 문구를 표시
+//
+// [확장 형식] 양 끝 기호를 직접 지정 (제58회부터 사용, 기존 형식과 함께 쓸 수 있음)
+// rels: [{ a, b,                      관계 양 끝 엔터티 이름
+//          aEnd, bEnd,                각 끝 기호: "none" | "one"(|) | "zeroOne"(○|) | "many"(까마귀발)
+//                                     | "oneMany"(까마귀발+|) | "zeroMany"(까마귀발+○)
+//          line,                      "solid"(기본) | "dashed" | "mix"(a 쪽 절반 점선, b 쪽 절반 실선)
+//          route,                     "straight"(기본) | "elbow"(ㄱ자: 위쪽 엔터티 아래변 → 아래쪽 엔터티 옆변)
+//          ux,                        elbow 시작점의 가로 위치(위쪽 엔터티 폭 대비 0~1, 기본 0.5)
+//          label }]                   선 위 글자 (예: "식별"). 없으면 표시 안 함
 
 const PAD = 10, LH = 19, HEAD = 26, GX = 96, GY = 64, M = 14, FS = 13;
 
@@ -113,9 +122,82 @@ function Relation({ r, P, C }) {
   );
 }
 
+// 끝 기호: 점 E(엔터티 경계)에서 선 쪽으로 향하는 단위벡터 (ux, uy)
+function EndMark({ kind, ex, ey, ux, uy, cls }) {
+  if (!kind || kind === "none") return null;
+  const px = -uy, py = ux;
+  const bar = (t) => {
+    const bx = ex + ux * t, by = ey + uy * t;
+    return <line x1={bx + px * 8} y1={by + py * 8} x2={bx - px * 8} y2={by - py * 8} className={cls} />;
+  };
+  const crow = () => {
+    const fx = ex + ux * 14, fy = ey + uy * 14;
+    return <path d={`M${fx},${fy} L${ex + px * 8},${ey + py * 8} M${fx},${fy} L${ex},${ey} M${fx},${fy} L${ex - px * 8},${ey - py * 8}`} className={cls} />;
+  };
+  const ring = (t) => <circle cx={ex + ux * t} cy={ey + uy * t} r={5} className={cls + " ring"} />;
+  switch (kind) {
+    case "one": return bar(12);
+    case "zeroOne": return <>{bar(10)}{ring(20)}</>;
+    case "many": return crow();
+    case "oneMany": return <>{crow()}{bar(18)}</>;
+    case "zeroMany": return <>{crow()}{ring(23)}</>;
+    default: return null;
+  }
+}
+
+function RelationV2({ r, A, B }) {
+  const cls = "erd-rel " + (r.label === "비식별" ? "nid" : "id");
+  let pts, ua, ub; // pts: 선을 이루는 점들(A 끝 → B 끝), ua/ub: 각 끝에서 선 쪽 방향
+  if (r.route === "elbow") {
+    const up = A.y <= B.y ? A : B, low = up === A ? B : A;
+    const sx = up.x + up.w * (r.ux ?? 0.5), sy = up.y + up.h;
+    const ty = low.y + HEAD + 18;
+    const toRight = low.x > sx;
+    const tx = toRight ? low.x : low.x + low.w;
+    const startU = [0, 1], endU = [toRight ? -1 : 1, 0];
+    const path = [[sx, sy], [sx, ty], [tx, ty]];
+    if (up === A) { pts = path; ua = startU; ub = endU; } else { pts = path.slice().reverse(); ua = endU; ub = startU; }
+  } else {
+    let x1, y1, x2, y2;
+    if (A.e.r === B.e.r) {
+      y1 = y2 = Math.max(A.y, B.y) + HEAD + 18;
+      if (A.x < B.x) { x1 = A.x + A.w; x2 = B.x; } else { x1 = A.x; x2 = B.x + B.w; }
+    } else {
+      const lo = Math.max(A.x, B.x), hi = Math.min(A.x + A.w, B.x + B.w);
+      x1 = x2 = hi > lo ? (lo + hi) / 2 : A.x + A.w / 2;
+      if (A.y < B.y) { y1 = A.y + A.h; y2 = B.y; } else { y1 = A.y; y2 = B.y + B.h; }
+    }
+    const len = Math.hypot(x2 - x1, y2 - y1), dx = (x2 - x1) / len, dy = (y2 - y1) / len;
+    pts = [[x1, y1], [x2, y2]]; ua = [dx, dy]; ub = [-dx, -dy];
+  }
+  const d = pts.map((p, i) => (i ? "L" : "M") + p[0] + "," + p[1]).join(" ");
+  let lines;
+  if (r.line === "mix" && pts.length === 2) {
+    const [[x1, y1], [x2, y2]] = pts, mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+    lines = <><line x1={x1} y1={y1} x2={mx} y2={my} className={cls + " dash"} /><line x1={mx} y1={my} x2={x2} y2={y2} className={cls} /></>;
+  } else {
+    lines = <path d={d} className={cls + (r.line === "dashed" ? " dash" : "")} />;
+  }
+  const [lx1, ly1] = pts[0], [lx2, ly2] = pts[pts.length - 1];
+  const mx = (pts[pts.length === 3 ? 1 : 0][0] + lx2) / 2, my = (pts[pts.length === 3 ? 1 : 0][1] + ly2) / 2;
+  const horiz = Math.abs(ly2 - (pts.length === 3 ? pts[1][1] : ly1)) < 1;
+  return (
+    <g>
+      {lines}
+      <EndMark kind={r.aEnd} ex={lx1} ey={ly1} ux={ua[0]} uy={ua[1]} cls={cls} />
+      <EndMark kind={r.bEnd} ex={lx2} ey={ly2} ux={ub[0]} uy={ub[1]} cls={cls} />
+      {r.label && (
+        <text x={horiz ? mx : mx + 8} y={horiz ? my - 9 : my + 4} textAnchor={horiz ? "middle" : "start"}
+          className={"erd-lbl " + (r.label === "비식별" ? "nid" : "id")}>{r.label}</text>
+      )}
+    </g>
+  );
+}
+
 function Legend({ d }) {
-  const hasId = d.rels.some((r) => r.id);
-  const hasN = d.rels.some((r) => !r.id && !r.solid);
+  const isV2 = (r) => r.a !== undefined;
+  const hasId = d.rels.some((r) => (isV2(r) ? r.label === "식별" && r.line !== "dashed" : r.id));
+  const hasN = d.rels.some((r) => (isV2(r) ? r.label === "비식별" && r.line === "dashed" : !r.id && !r.solid));
   const fk = (<><span className="lg-fk">파란 글씨</span> = 상속된 FK</>);
   return (
     <div className="erd-legend">
@@ -132,7 +214,7 @@ function Legend({ d }) {
         </div>
       )}
       <div className="lg-sym">
-        {d.noSym ? <>{d.note} · {fk}</> : <>부모 쪽 | = 1 · 자식 쪽 까마귀발 = N(다수) · 까마귀발 옆 | = 필수, ○ = 선택 · {fk}</>}
+        {d.noSym || d.note ? <>{d.note} · {fk}</> : <>부모 쪽 | = 1 · 자식 쪽 까마귀발 = N(다수) · 까마귀발 옆 | = 필수, ○ = 선택 · {fk}</>}
       </div>
     </div>
   );
@@ -145,7 +227,9 @@ export default function Erd({ data: d }) {
       <div className="scroll">
         <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="erd-svg" role="img">
           {Object.values(boxes).map((b) => <Entity key={b.e.name} b={b} />)}
-          {d.rels.map((r, i) => <Relation key={i} r={r} P={boxes[r.p]} C={boxes[r.ch]} />)}
+          {d.rels.map((r, i) => r.a !== undefined
+            ? <RelationV2 key={i} r={r} A={boxes[r.a]} B={boxes[r.b]} />
+            : <Relation key={i} r={r} P={boxes[r.p]} C={boxes[r.ch]} />)}
         </svg>
       </div>
       {d.rels.length > 0 && <Legend d={d} />}
