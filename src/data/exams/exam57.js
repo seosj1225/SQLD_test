@@ -2622,7 +2622,8 @@ export default {
               "route": "self",
               "aEnd": "zeroMany",
               "bEnd": "zeroOne",
-              "line": "dashed"
+              "line": "dashed",
+              "label": "비식별"
             }
           ]
         }

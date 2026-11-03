@@ -47,8 +47,9 @@ function layout(d) {
     b.x = colX(b.e.c) + (colW[b.e.c] - b.w) / 2;
     b.y = rowY(b.e.r);
   });
-  const self = d.rels.some((r) => r.route === "self");
-  return { boxes, W: colX(nc) - GX + M + (self ? SELF_X + 8 : 0), H: rowY(nr) - GY + M + (self ? SELF_Y + 8 : 0) };
+  const self = d.rels.find((r) => r.route === "self");
+  const selfW = self ? SELF_X + (self.label ? 16 + textWidth(self.label, 12) : 8) : 0;
+  return { boxes, W: colX(nc) - GX + M + selfW, H: rowY(nr) - GY + M + (self ? SELF_Y + 8 : 0) };
 }
 
 function Entity({ b }) {
@@ -191,8 +192,9 @@ function RelationV2({ r, A, B }) {
     lines = <path d={d} className={cls + (r.line === "dashed" ? " dash" : "")} />;
   }
   const [lx1, ly1] = pts[0], [lx2, ly2] = pts[pts.length - 1];
-  const mx = (pts[pts.length === 3 ? 1 : 0][0] + lx2) / 2, my = (pts[pts.length === 3 ? 1 : 0][1] + ly2) / 2;
-  const horiz = Math.abs(ly2 - (pts.length === 3 ? pts[1][1] : ly1)) < 1;
+  let mx = (pts[pts.length === 3 ? 1 : 0][0] + lx2) / 2, my = (pts[pts.length === 3 ? 1 : 0][1] + ly2) / 2;
+  let horiz = Math.abs(ly2 - (pts.length === 3 ? pts[1][1] : ly1)) < 1;
+  if (r.route === "self") { mx = pts[1][0]; my = (pts[1][1] + pts[2][1]) / 2; horiz = false; } // 오른쪽 세로선 옆
   return (
     <g>
       {lines}
